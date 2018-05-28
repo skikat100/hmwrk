@@ -1,66 +1,75 @@
 public class SuperBlock {
-    private final int defaultInodeBlocks = 64;
-    public int totalBlocks;
-    public int inodeBlocks;
-    public int freeList;
+    private final int inodeBlocks = 64;
+    public int totalBlocks; // the number of disk blocks
+    public int totalInodes; // the number of inodes
+    public int freeList;    // the block number of the free list's head
 
-    public SuperBlock(int var1) {
-        byte[] var2 = new byte[512];
-        SysLib.rawread(0, var2);
-        this.totalBlocks = SysLib.bytes2int(var2, 0);
-        this.inodeBlocks = SysLib.bytes2int(var2, 4);
-        this.freeList = SysLib.bytes2int(var2, 8);
-        if (this.totalBlocks != var1 || this.inodeBlocks <= 0 || this.freeList < 2) {
-            this.totalBlocks = var1;
-            SysLib.cerr("default format( 64 )\n");
-            this.format();
+    public SuperBlock(int diskSize)
+    {
+        byte[] buffer = new byte[512];
+        SysLib.rawread(0, buffer);
+        totalBlocks = SysLib.bytes2int(buffer, 0);
+        totalInodes = SysLib.bytes2int(buffer, 4);
+        freeList = SysLib.bytes2int(buffer, 8);
+        if (totalBlocks != diskSize || totalInodes <= 0 || freeList < 2)
+        {
+            totalBlocks = diskSize;
+            SysLib.cerr("default format( " + inodeBlocks + ")\n");
+            format();
         }
     }
 
-    void sync() {
-        byte[] var1 = new byte[512];
-        SysLib.int2bytes(this.totalBlocks, var1, 0);
-        SysLib.int2bytes(this.inodeBlocks, var1, 4);
-        SysLib.int2bytes(this.freeList, var1, 8);
-        SysLib.rawwrite(0, var1);
-        SysLib.cerr("Superblock synchronized\n");
+    public void superSync()
+    {
+        byte[] buffer = new byte[512];
+        SysLib.int2bytes(totalBlocks, buffer, 0);
+        SysLib.int2bytes(totalInodes, buffer, 4);
+        SysLib.int2bytes(freeList, buffer, 8);
+        SysLib.rawwrite(0, buffer);
+        SysLib.cerr("Synchronized Superblock\n");
     }
 
-    void format() {
-        this.format(64);
+    public void format()
+    {
+        format(inodeBlocks);
     }
 
-    void format(int var1) {
-        this.inodeBlocks = var1;
+    public void format(int maxFiles)
+    {
+        totalInodes = maxFiles;
 
-        for(short var2 = 0; var2 < this.inodeBlocks; ++var2) {
-            Inode var3 = new Inode();
-            var3.flag = 0;
-            var3.toDisk(var2);
+        for(short i = 0; i < totalInodes; ++i)
+        {
+            Inode iNode = new Inode();
+            iNode.flag = 0;
+            iNode.toDisk(i);
         }
+        freeList = 2 + totalInodes * 32 / 512;
 
-        this.freeList = 2 + this.inodeBlocks * 32 / 512;
+        for(int i = freeList; i < totalBlocks; ++i)
+        {
+            byte[] buffer = new byte[512];
 
-        for(int var5 = this.freeList; var5 < this.totalBlocks; ++var5) {
-            byte[] var6 = new byte[512];
-
-            for(int var4 = 0; var4 < 512; ++var4) {
-                var6[var4] = 0;
+            for(int j = 0; j < 512; ++j)
+            {
+                buffer[j] = 0;
             }
 
-            SysLib.int2bytes(var5 + 1, var6, 0);
-            SysLib.rawwrite(var5, var6);
+            SysLib.int2bytes(i + 1, buffer, 0);
+            SysLib.rawwrite(i, buffer);
         }
 
-        this.sync();
+        superSync();
     }
 
-    public int getFreeBlock() {
-        int var1 = this.freeList;
-        if (var1 != -1) {
+    public int getFreeBlock()
+    {
+        int var1 = freeList;
+        if (var1 != -1)
+        {
             byte[] var2 = new byte[512];
             SysLib.rawread(var1, var2);
-            this.freeList = SysLib.bytes2int(var2, 0);
+            freeList = SysLib.bytes2int(var2, 0);
             SysLib.int2bytes(0, var2, 0);
             SysLib.rawwrite(var1, var2);
         }
@@ -68,19 +77,24 @@ public class SuperBlock {
         return var1;
     }
 
-    public boolean returnBlock(int var1) {
-        if (var1 < 0) {
+    public boolean returnBlock(int var1)
+    {
+        if (var1 < 0)
+        {
             return false;
-        } else {
+        }
+        else
+        {
             byte[] var2 = new byte[512];
 
-            for(int var3 = 0; var3 < 512; ++var3) {
+            for(int var3 = 0; var3 < 512; ++var3)
+            {
                 var2[var3] = 0;
             }
 
-            SysLib.int2bytes(this.freeList, var2, 0);
+            SysLib.int2bytes(freeList, var2, 0);
             SysLib.rawwrite(var1, var2);
-            this.freeList = var1;
+            freeList = var1;
             return true;
         }
     }

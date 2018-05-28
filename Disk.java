@@ -80,7 +80,7 @@ public class Disk extends Thread {
 	if ( command == IDLE && readyBuffer == false ) {
 	    command = SYNC;
 	    notify( );
-	    // System.out.println( "DISK sync notified the disk" );
+	    // System.out.println( "DISK superSync notified the disk" );
 	    return true;
 	} else
 	    return false;
