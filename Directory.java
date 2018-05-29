@@ -1,11 +1,14 @@
-public class Directory {
-    private static int maxChars = 30; // max characters of each file name
+public class Directory 
+{
+	private static int maxChars = 30; // max characters of each file name
 
     // Directory entries
     private int fsize[];        // each element stores a different file size.
     private char fnames[][];    // each element stores a different file name.
-
-    public Directory( int maxInumber ) { // directory constructor
+	
+	// directory constructor
+    public Directory( int maxInumber ) 
+	{
         fsize = new int[maxInumber];     // maxInumber = max files
         for ( int i = 0; i < maxInumber; i++ )
             fsize[i] = 0;                 // all file size initialized to 0
@@ -15,73 +18,99 @@ public class Directory {
         root.getChars( 0, fsize[0], fnames[0], 0 ); // fnames[0] includes "/"
     }
 
-    public void bytes2directory( byte data[] ) {
-        int var2 = 0;
+	// assumes data[] received directory information from disk
+	// initializes the Directory instance with this data[]
+    public void bytes2directory( byte data[] ) 
+	{
+        int offset = 0;
 
-        int var3;
-        for(var3 = 0; var3 < this.fsize.length; var2 += 4) {
-            this.fsize[var3] = SysLib.bytes2int(var1, var2);
-            ++var3;
+		// go through each file and set the file size at i to the info given in data
+        for(int i = 0; i < fsize.length; offset += 4, i++) 
+		{
+            fsize[i] = SysLib.bytes2int(data, offset);
         }
 
-        for(var3 = 0; var3 < this.fnames.length; var2 += maxChars * 2) {
-            String var4 = new String(var1, var2, maxChars * 2);
-            var4.getChars(0, this.fsize[var3], this.fnames[var3], 0);
-            ++var3;
+		// go through each of the file names 
+        for(int i = 0; i < fnames.length; offset += maxChars * 2, i++) 
+		{
+            String name = new String(data, offset, maxChars * 2);
+            name.getChars(0, fsize[i], fnames[i], 0);	// initialize the chars in data to name
         }
     }
 
-    public byte[] directory2bytes( ) {
-        byte[] var1 = new byte[this.fsize.length * 4 + this.fnames.length * maxChars * 2];
-        int var2 = 0;
+	// converts and return Directory information into a plain byte array
+    // this byte array will be written back to disk
+    // note: only meaningfull directory information should be converted into bytes.	
+    public byte[] directory2bytes( ) 
+	{
+        byte[] buffer = new byte[(4 * fsize.length) + (2 * fnames.length * maxChars)];
+        int offset = 0;
 
-        int var3;
-        for(var3 = 0; var3 < this.fsize.length; var2 += 4) {
-            SysLib.int2bytes(this.fsize[var3], var1, var2);
-            ++var3;
+		// goes through each file, turns them into bytes, and reads into the buffer
+        for (int i = 0; i < fsize.length; offset += 4, i++) 
+		{
+            SysLib.int2bytes( fsize[i], buffer, offset );
         }
 
-        for(var3 = 0; var3 < this.fnames.length; var2 += maxChars * 2) {
-            String var4 = new String(this.fnames[var3], 0, this.fsize[var3]);
-            byte[] var5 = var4.getBytes();
-            System.arraycopy(var5, 0, var1, var2, var5.length);
-            ++var3;
+		// goes through each file name, turns them into bytes, and reads into the buffer
+        for (int i = 0; i < fnames.length; offset += maxChars * 2, i++) 
+		{
+            String name = new String(fnames[i], 0, fsize[i]);
+            byte[] stringBuffer = name.getBytes();
+            System.arraycopy(stringBuffer, 0, buffer, offset, stringBuffer.length);
         }
 
-        return var1;
+        return buffer;	
     }
 
-    public short ialloc( String filename ) {
-        for(short var2 = 1; var2 < this.fsize.length; ++var2) {
-            if (this.fsize[var2] == 0) {
-                this.fsize[var2] = Math.min(var1.length(), maxChars);
-                var1.getChars(0, this.fsize[var2], this.fnames[var2], 0);
-                return var2;
+	// filename is the one of a file to be created.
+	// allocates a new inode number for this filename
+    public short ialloc( String filename ) 
+	{
+		// for each file index
+        for (short i = 1; i < fsize.length; i++) 
+		{
+            if (fsize[i] == 0) // if there is an empty slot 
+			{
+                fsize[i] = Math.min(maxChars, filename.length()); // set the the size of file
+                filename.getChars(0, fsize[i], fnames[i], 0); // set the filename 
+                return i;
             }
         }
-
         return -1;
     }
 
-    public boolean ifree( short iNumber ) {
-        if (this.fsize[var1] > 0) {
-            this.fsize[var1] = 0;
+    // deallocates this inumber (inode number)
+	// the corresponding file will be deleted.
+    public boolean ifree( short iNumber ) 
+	{
+        if (fsize[iNumber] > 0) 
+		{
+            fsize[iNumber] = 0;	// deallocated
             return true;
-        } else {
+        } 
+		else 
+		{
             return false;
         }
     }
 
-    public short namei( String filename ) {
-        for(short var2 = 0; var2 < this.fsize.length; ++var2) {
-            if (this.fsize[var2] == var1.length()) {
-                String var3 = new String(this.fnames[var2], 0, this.fsize[var2]);
-                if (var1.compareTo(var3) == 0) {
-                    return var2;
+	// returns the inumber corresponding to this filename
+    public short namei( String filename ) 
+	{
+		// go through all of the files
+        for (short i = 0; i < fsize.length; i++) 
+		{
+            if (fsize[i] == filename.length( )) // if the length of the strings match
+			{
+                String name = new String(fnames[i], 0, fsize[i]); // create the string
+
+                if (filename.compareTo(name) == 0) // compare strings
+				{
+                    return i; // return the corresponding inumber
                 }
             }
         }
-
         return -1;
     }
 }

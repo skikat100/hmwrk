@@ -1,100 +1,120 @@
+//A SuperBlock is the first disk block, used to describe 
+//number of disk blocks, inodes, and the number of the head empty block
 public class SuperBlock {
     private final int inodeBlocks = 64;
     public int totalBlocks; // the number of disk blocks
     public int totalInodes; // the number of inodes
     public int freeList;    // the block number of the free list's head
 
+	//Constructor that takes in a int for the amount of blocks
     public SuperBlock(int diskSize)
     {
+		//Read the first disk block into a buffer
         byte[] buffer = new byte[512];
         SysLib.rawread(0, buffer);
+
+		//Initialize this SuperBlock
         totalBlocks = SysLib.bytes2int(buffer, 0);
         totalInodes = SysLib.bytes2int(buffer, 4);
         freeList = SysLib.bytes2int(buffer, 8);
-        if (totalBlocks != diskSize || totalInodes <= 0 || freeList < 2)
+
+		//If the current disk blocks are invalid, format it with the default size
+        if (totalInodes <= 0 || totalBlocks != diskSize || freeList < 2)
         {
+			SysLib.cerr("format( " + inodeBlocks + ")\n");
             totalBlocks = diskSize;
-            SysLib.cerr("default format( " + inodeBlocks + ")\n");
-            format();
+            format(inodeBlocks);
         }
     }
 
+	//Writes the current SuperBlock into disk
     public void superSync()
     {
+		//Convert fields into bytes
         byte[] buffer = new byte[512];
         SysLib.int2bytes(totalBlocks, buffer, 0);
         SysLib.int2bytes(totalInodes, buffer, 4);
         SysLib.int2bytes(freeList, buffer, 8);
+
+		//Write the bytes to disk
         SysLib.rawwrite(0, buffer);
-        SysLib.cerr("Synchronized Superblock\n");
+        SysLib.cerr("Superblock Synchronized\n");
     }
 
-    public void format()
-    {
-        format(inodeBlocks);
-    }
-
+	//Format the disk with the maximum amount of files int maxFiles
     public void format(int maxFiles)
     {
-        totalInodes = maxFiles;
+        totalInodes = maxFiles;		//Set the amount of inodes to max files needed
 
-        for(short i = 0; i < totalInodes; ++i)
+		//Create the inodes and initialize to default values
+        for(short i = 0; i < totalInodes; i++)
         {
-            Inode iNode = new Inode();
-            iNode.flag = 0;
-            iNode.toDisk(i);
+            Inode inode = new Inode();
+            inode.flag = 0;		//Set the inode to unused
+            inode.toDisk(i);	//Save the inode to disk at the i-th node
         }
-        freeList = 2 + totalInodes * 32 / 512;
+		//1 SuperBlock + (totalInodes * 32 bytes iNodeSize / 512 bytes for each block)
+        freeList = 1 + (totalInodes * 32 / 512);
 
-        for(int i = freeList; i < totalBlocks; ++i)
+		//Go through each of the free blocks
+        for(int i = freeList; i < totalBlocks; i++)
         {
             byte[] buffer = new byte[512];
 
+			//Initialize the buffer array to 0 
             for(int j = 0; j < 512; ++j)
             {
                 buffer[j] = 0;
             }
 
+			//Write the buffer array into disk at position i + 1 next block
             SysLib.int2bytes(i + 1, buffer, 0);
             SysLib.rawwrite(i, buffer);
         }
 
+		//Write the SuperBlock to disk
         superSync();
     }
 
+	//Dequeue the top block from the free list
     public int getFreeBlock()
     {
-        int var1 = freeList;
-        if (var1 != -1)
+        int block = freeList;	//Get the top block index
+        if (block != -1)		//If there is an empty block
         {
-            byte[] var2 = new byte[512];
-            SysLib.rawread(var1, var2);
-            freeList = SysLib.bytes2int(var2, 0);
-            SysLib.int2bytes(0, var2, 0);
-            SysLib.rawwrite(var1, var2);
+			//Read in the block's index that it was pointing to
+            byte[] buffer = new byte[512];
+            SysLib.rawread(block, buffer);
+
+			//Set the freeList to the next block that it was pointing to
+            freeList = SysLib.bytes2int(buffer, 0);
+            SysLib.int2bytes(0, buffer, 0);
+            SysLib.rawwrite(block, buffer);
         }
 
-        return var1;
+        return block;	//Return the empty block
     }
 
-    public boolean returnBlock(int var1)
+	//Enqueue a given block to the front of the free list
+    public boolean returnBlock(int blockNumber)
     {
-        if (var1 < 0)
+		//Error, block invalid
+        if (blockNumber < 0)
         {
             return false;
         }
         else
         {
-            byte[] var2 = new byte[512];
+			//Create and initialize buffer to 0
+            byte[] buffer = new byte[512];
 
-            for(int var3 = 0; var3 < 512; ++var3)
+            for(int i = 0; i < 512; i++)
             {
-                var2[var3] = 0;
+                buffer[i] = 0;
             }
-
-            SysLib.int2bytes(freeList, var2, 0);
-            SysLib.rawwrite(var1, var2);
-            freeList = var1;
+            SysLib.int2bytes(freeList, buffer, 0);
+            SysLib.rawwrite(blockNumber, buffer);	//Overwrite disk to empty buffer
+            freeList = blockNumber;		//Set the block to the front of the free list
             return true;
         }
     }
