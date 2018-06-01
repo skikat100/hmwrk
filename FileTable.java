@@ -17,69 +17,70 @@ public class FileTable {
 	// return a reference to this file (structure) table entry
     public synchronized FileTableEntry falloc( String filename, String mode ) 
 	{
+		int iNumber = -1;
         Inode inode = null;
-        short iNumber = -1;
 
-        while(true) 
+        while(true)
 		{
-            if (filename.equals("/")) // if the filename is the root directory
-			{
-                iNumber = 0;	// the contents reside in inode 0
-            } 
-			else 
-			{
-                iNumber = dir.namei(filename);	// the inumber of the filename
-            }
-
-            if (iNumber >= 0) // There is a corresponding file
-			{
-                inode = new Inode(iNumber);	// create a new inode with that inumber
-
-                if (mode.compareTo("r") == 0)	// mode is equal to read
-				{
-                    if (inode.flag != 0 && inode.flag != 1) 
+           iNumber = (filename.equals("/") ? 0 : dir.namei(filename));
+           if(iNumber >= 0)
+		   {
+              inode = new Inode ((short)iNumber);
+              if(mode.equals("r"))
+			  {
+				 // inode.flag is read
+                 if(inode.flag == 2 || inode.flag == 0) break; // No need to wait
+                 else if(inode.flag == 1)  // Wait for write to finish
+				 {
+                    try
 					{
-                        try 
-						{
-                            wait();
-                        } 
-						catch (InterruptedException e) { }
-                        continue;
-                    }
-                    inode.flag = 1;
+						wait();
+					} catch (InterruptedException e){}
+				 }
+				 // no more open
+                 else if(inode.flag == -1)  // File is to be deleted
+				 {
+                    iNumber = -1; // No more open
+                    return null;
+                 }
+              }
+              // wait until inode is free to write if writing
+              else if (mode.equals("w") || mode.equals ("w+") || mode.equals("a") )
+			  { 
+                 if(inode.flag == 0 || inode.flag == 2)
+				 {
                     break;
-                }
-                if (inode.flag != 0 && inode.flag != 3) 
-				{
-                    if (inode.flag == 1 || inode.flag == 2) 
+                 }
+                 else if(inode.flag == 1)
+				 {
+                    try
 					{
-                        inode.flag = (short) (inode.flag + 3);
-                        inode.toDisk(iNumber);
-                    }
-                    try 
-					{
-                        wait();
-                    } 
-					catch (InterruptedException e) { }
-                    continue;
-                }
-                inode.flag = 2;
-                break;
-            }
-            if (mode.compareTo("r") == 0) 
-			{
-                return null;
-            }
-            iNumber = dir.ialloc(filename);
-            inode = new Inode();
-			inode.flag = 2;
-            break;
+						wait();
+					} catch (InterruptedException e){}
+				 }
+                 else if (inode.flag == -1)
+				 {
+                    iNumber = -1;
+                    return null;
+                 }
+              }
+           }
         }
-        inode.count++;
-        inode.toDisk(iNumber);
-        FileTableEntry entry = new FileTableEntry(inode, iNumber, mode);
-        table.addElement(entry);
-        return var5;
+
+        if(mode.equals("a") || mode.equals("w") || mode.equals("w+") )
+		{
+           inode.flag = 1;
+		}
+        else
+		{
+           inode.flag = 2;
+        }
+		inode.count++;
+        inode.toDisk( (short) iNumber );	// Save iNode to disk after every update
+        FileTableEntry e = new FileTableEntry(inode, (short)iNumber, mode);
+        table.add(e);
+
+		return e;
     }
 
     // receive a file table entry reference
@@ -88,36 +89,26 @@ public class FileTable {
 	// return true if this file table entry found in my table
     public synchronized boolean ffree( FileTableEntry e ) 
 	{
-        if (table.removeElement(e)) 
+		if (e == null)
 		{
-            e.inode.count--;
-            switch(e.inode.flag) 
-			{
-                case 1:
-                    e.inode.flag = 0;
-                    break;
-                case 2:
-                    e.inode.flag = 0;
-                case 3:
-                default:
-                    break;
-                case 4:
-                    e.inode.flag = 3;
-                    break;
-                case 5:
-                    e.inode.flag = 3;
-            }
+			return false;	// invalid
+		}
+        int index = e.iNumber;
+        if (index == -1)
+		{
+			return false;
+		}
+        e.inode.flag = 0;	// free
+        e.inode.count--;
+        e.inode.toDisk((short)index);	// save corresponding inode
 
-            e.inode.toDisk(e.iNumber);
-            e = null;
-            notify();
-            return true;
-        } 
-		else 
-		{
-            return false;
-        }
-    }
+        if (e.count == 0)  // file is not being accessed
+|		{
+			notifyAll();
+            table.remove(e);	// delete the table entry
+		}
+		return true;
+	}
 
 	// should be called before starting a format
     public synchronized boolean fempty( ) 
