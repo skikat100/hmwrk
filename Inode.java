@@ -57,7 +57,7 @@ public class Inode
     }
 
     // save to disk as the i-th inode
-	int toDisk( short iNumber )                    
+	void toDisk( short iNumber )                    
     {  
 		byte[] buffer = new byte[32];
 
@@ -103,14 +103,15 @@ public class Inode
 	{
 		// find the block of the target
 		int position = offset / 512;
-        if (indirect < 0)
-		{
-            return -1;	// error	
-        } 
-		else if (position < 11) // resides in the direct blocks
+       
+		if (position < 11) // resides in the direct blocks
 		{
             return direct[position];
-        } 
+		} 
+		else if (indirect < 0)
+		{
+            return -1;	// error	
+        }
 		else 
 		{
             byte[] buffer = new byte[512];
@@ -162,14 +163,21 @@ public class Inode
 	}
 
 	// Unregisters the indexBlock and returns a buffer of pointers (indirect)
-	byte[] unsetIndexBlock( )
+	short[] unsetIndexBlock( )
 	{
 		if (indirect != -1)
 		{
 			byte[] buffer = new byte[512];
 			SysLib.rawread(indirect, buffer);	// read into buffer the prev indirect pointer
 			indirect = -1;						// invalidate the indirect pointer
-			return buffer;
+			short[] indirectBlockNumbers = new short[256];
+			
+			// Convert buffer to list of all the indirect block numbers
+			for(int i = 0; i < indirectBlockNumbers.length; i++) {
+				indirectBlockNumbers[i] = SysLib.bytes2short(buffer, i * 2);
+			}
+
+			return indirectBlockNumbers;
 		}
 		else
 		{
@@ -216,7 +224,7 @@ public class Inode
 
 			// get the offset of the indirect pointers
             int indirectOffset = position - 11;
-            if ( SysLib.bytes2short(buffer, offset * 2) > 0 ) // if the indirect block is already set
+            if ( SysLib.bytes2short(buffer, indirectOffset * 2) > 0 ) // if the indirect block is already set
 			{
                 SysLib.cerr("indirect number found: " + offset + " values: " 
 					+ SysLib.bytes2short(buffer, offset * 2) + "\n");
@@ -225,7 +233,7 @@ public class Inode
 			else 
 			{
 				// read the empty pointer into the buffer and write to disk
-                SysLib.short2bytes(emptyBlock, buffer, offset * 2);
+                SysLib.short2bytes(emptyBlock, buffer, indirectOffset * 2);
                 SysLib.rawwrite(indirect, buffer);
                 return 0;	// No erors
             }

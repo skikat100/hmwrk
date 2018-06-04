@@ -1,7 +1,7 @@
 //A SuperBlock is the first disk block, used to describe 
 //number of disk blocks, inodes, and the number of the head empty block
 public class SuperBlock {
-    private final int inodeBlocks = 64;
+    public final int inodeBlocks = 64;
     public int totalBlocks; // the number of disk blocks
     public int totalInodes; // the number of inodes
     public int freeList;    // the block number of the free list's head
@@ -118,3 +118,4 @@ public class SuperBlock {
             return true;
         }
     }
+}

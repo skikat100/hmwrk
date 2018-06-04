@@ -1,3 +1,5 @@
+import java.util.*;
+
 public class FileTable {
 
     private Vector table;         // the actual entity of this file table
@@ -23,6 +25,15 @@ public class FileTable {
         while(true)
 		{
            iNumber = (filename.equals("/") ? 0 : dir.namei(filename));
+           // Create the file if it doesn't exist, except in read mode
+           if(iNumber == -1) {
+               if(mode == "r") {
+                   return null;
+               }
+
+               iNumber = dir.ialloc(filename);
+           }
+
            if(iNumber >= 0)
 		   {
               inode = new Inode ((short)iNumber);
@@ -77,7 +88,7 @@ public class FileTable {
         }
 		inode.count++;
         inode.toDisk( (short) iNumber );	// Save iNode to disk after every update
-        FileTableEntry e = new FileTableEntry(inode, (short)iNumber, mode);
+        FileTableEntry e = new FileTableEntry(inode, (short)iNumber, mode, filename);
         table.add(e);
 
 		return e;
@@ -99,11 +110,11 @@ public class FileTable {
 			return false;
 		}
         e.inode.flag = 0;	// free
-        e.inode.count--;
+        e.count--;
         e.inode.toDisk((short)index);	// save corresponding inode
 
         if (e.count == 0)  // file is not being accessed
-|		{
+		{
 			notifyAll();
             table.remove(e);	// delete the table entry
 		}
@@ -114,5 +125,15 @@ public class FileTable {
     public synchronized boolean fempty( ) 
 	{
         return table.isEmpty( );  // return if table is empty
-    }                            
+    }  
+    
+    public synchronized boolean isFileOpen(String filename) {
+        for(int i = 0; i < table.size(); i++) {
+            if(((FileTableEntry)table.get(i)).fileName == filename) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

@@ -21,9 +21,11 @@ class Test5 extends Thread {
     if ( test1( ) ) // format with specified # of files
       SysLib.cout("Correct behavior of format......................2\n");
     if ( test2( ) ) // open "css430" with "w+"
-      SysLib.cout("Correct behavior of open........................2\n");
+      SysLib.cout("Correct behavior of open........................2\n");  
     if ( test3( ) ) // write buf[16]
       SysLib.cout("Correct behavior of writing a few bytes.........2\n");
+    if ( test3point5( ) ) // fsize
+      SysLib.cout("Correct behavior of reading file size...........2\n");
     if ( test4( ) ) // close fd
       SysLib.cout("Correct behavior of close.......................2\n");
     if ( test5( ) ) // read buf[16] from "css430"
@@ -34,20 +36,18 @@ class Test5 extends Thread {
       SysLib.cout("Correct behavior of seeking in a small file.....1\n");
     if ( test8( ) ) // open "css430" with "w+"
       SysLib.cout("Correct behavior of read/writing a small file.0.5\n");
-
     test9( );        // open "bothell" with "w+"
     if ( test10( ) ) // write buf[512 * 13]
       SysLib.cout("Correct behavior of writing a lot of bytes....0.5\n");
     test11( );       // close fd
     if ( test12( ) ) // read buf[512 * 13] from "bothell"
-      SysLib.cout("Correct behavior of reading a lot of bytes....0.5\n");
+      SysLib.cout("Correct behavior of reading a lot of bytes....0.5\n");  
     if ( test13( ) ) // append buf[32] to "bothell"
       SysLib.cout("Correct behavior of appending to a large file.0.5\n");
     if ( test14( ) ) // seek and read from "bothell"
       SysLib.cout("Correct behavior of seeking in a large file...0.5\n");
     if ( test15( ) ) // open "bothell" with "w+"
       SysLib.cout("Correct behavior of read/writing a large file.0.5\n");
-
     if ( test16( ) ) // delete "css430"
       SysLib.cout("Correct behavior of delete....................0.5\n");
     if ( test17( ) ) // create "uwb0" - "uwb45" of buf[512 * 13]
@@ -108,6 +108,18 @@ class Test5 extends Thread {
     }
     SysLib.cout( "successfully completed\n" );
     return true;
+  }
+
+  private boolean test3point5() {
+      //.............................................."
+      SysLib.cout( "3.5: size = size( fd )...." );
+      size = SysLib.fsize( fd );
+      if ( size != 16 ) {
+        SysLib.cout( "size = " + size + " (wrong)\n" );
+        return false;
+      }
+      SysLib.cout( "successfully completed\n" );
+      return true;
   }
 
   private boolean test4( ) {
@@ -483,7 +495,10 @@ class Test5 extends Thread {
       return false;
     }
     SysLib.close( fd );
-    SysLib.delete( "css430" );
+    if(SysLib.delete( "css430" ) != 0) {
+      SysLib.cout("Delete failed");
+      return false;
+    }
     fd = SysLib.open( "css430", "r" );
     if ( fd != -1 ) {
       SysLib.cout( "fd = " + fd + " (wrong, css430 still exists!)\n" );

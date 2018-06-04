@@ -35,6 +35,8 @@ public class Kernel
    //              int whence )
    public final static int FORMAT  = 18; // SysLib.format( int files )
    public final static int DELETE  = 19; // SysLib.delete( String fileName )
+   public final static int FREAD   = 20;
+   public final static int FWRITE = 21;
 
    // Predefined file descriptors
    public final static int STDIN  = 0;
@@ -47,6 +49,7 @@ public class Kernel
 
    // System thread references
    private static Scheduler scheduler;
+   private static FileSystem fs;
    private static Disk disk;
    private static Cache cache;
 
@@ -75,13 +78,16 @@ public class Kernel
                   // instantiate and start a disk
                   disk = new Disk( 1000 );
                   disk.start( );
-
+                  
                   // instantiate a cache memory
                   cache = new Cache( disk.blockSize, 10 );
 
                   // instantiate synchronized queues
                   ioQueue = new SyncQueue( );
                   waitQueue = new SyncQueue( scheduler.getMaxThreads( ) );
+
+                  // instantiate file system
+                  fs = new FileSystem(1000);
                   return OK;
                case EXEC:
                   return sysExec( ( String[] )args );
@@ -104,6 +110,8 @@ public class Kernel
                         return OK;
                      }
                   }
+
+                  disk.sync();
                   return ERROR;
                case SLEEP:   // sleep a given period of milliseconds
                   scheduler.sleepThread( param ); // param = milliseconds
@@ -176,20 +184,118 @@ public class Kernel
                case CFLUSH:  // to be implemented in assignment 4
                   cache.flush( );
                   return OK;
-               case OPEN:    // to be implemented in project
-                  return OK;
-               case CLOSE:   // to be implemented in project
-                  return OK;
-               case SIZE:    // to be implemented in project
-                  return OK;
-               case SEEK:    // to be implemented in project
-                  return OK;
-               case FORMAT:  // to be implemented in project
-                  return OK;
-               case DELETE:  // to be implemented in project
-                  return OK;
+
+
+               //
+               // Project 5 Implementation
+               //
+
+
+               case OPEN:{    // to be implemented in project
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+
+                        // Find out if there are any free fds in the
+                        // tcb. if there aren't we can't open a file.
+                        boolean usedAllFds = true;
+                        for(int i = 3; i < myTcb.ftEnt.length; i++) {
+                              if(myTcb.ftEnt[i] == null) {
+                                    usedAllFds = false;
+                                    break;
+                              }
+                        }
+
+                        if(usedAllFds) {
+                              return ERROR;
+                        }
+
+                        String[] s = (String[]) args;
+                        FileTableEntry ent = fs.open(s[0], s[1]);
+                        int fd = myTcb.getFd(ent);
+                        return fd;
+                  }
+               
+               case CLOSE: {   // to be implemented in project
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+                        FileTableEntry ent = myTcb.getFtEnt(param);
+                        if(!fs.close(ent)) {
+                              return ERROR;
+                        }
+                        myTcb.returnFd(param);
+                        return OK;
+                  }
+
+               case SIZE: {   // to be implemented in project
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+                        FileTableEntry ent = myTcb.getFtEnt(param);
+                        if(ent == null) {
+                              return ERROR;
+                        }
+                        return fs.fsize(ent);
+                  }
+
+               case SEEK:{    // to be implemented in project
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+                        int[] params = (int[]) args;
+                        FileTableEntry ent = myTcb.getFtEnt(params[0]);
+                        if(ent == null) {
+                              return ERROR;
+                        }
+
+                        return fs.seek(ent, params[1], params[2]);
+                  }
+
+               case FREAD:{
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+                        byte[] buffer = (byte[]) args;
+                        FileTableEntry ent = myTcb.getFtEnt(param);
+                        if(ent == null) {
+                              return ERROR;
+                        }
+
+                        return fs.read(ent, buffer);
+                  }
+
+               case FWRITE: {
+                        if((myTcb = scheduler.getMyTcb()) == null) {
+                              return ERROR;
+                        }
+                        byte[] buffer = (byte[]) args;
+                        FileTableEntry ent = myTcb.getFtEnt(param);
+                        if(ent == null) {
+                              return ERROR;
+                        }
+
+                        return fs.write(ent, buffer);
+                  }
+               
+               case FORMAT: { // to be implemented in project
+                        boolean result = fs.format(param);
+                        if(result) {
+                              return OK;
+                        }
+                        return ERROR;
+                  }
+
+               case DELETE: {  // to be implemented in project
+                        boolean result = fs.delete((String)args);
+                        if(result) {
+                              return OK;
+                        }
+                        return ERROR;
+                  }
             }
             return ERROR;
+
          case INTERRUPT_DISK: // Disk interrupts
             // wake up the thread waiting for a service completion
             ioQueue.dequeueAndWakeup( COND_DISK_FIN );

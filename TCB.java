@@ -68,7 +68,7 @@ public class TCB {
 	    return null;
     }
 
-    // added for the file systme
+    // added for the file system
     public synchronized FileTableEntry getFtEnt( int fd ) {
 	if ( fd >= 3 && fd < 32 )
 	    return ftEnt[fd];
